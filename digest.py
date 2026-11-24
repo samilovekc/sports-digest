@@ -19,7 +19,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 sys.path.insert(0, str(Path(__file__).parent))
-from config import SECTIONS, WINDOW, MAX_PER_TOPIC, PIN_PATTERN  # noqa: E402
+from config import SECTIONS, WINDOW, MAX_PER_TOPIC, PIN_PATTERN, BLOCK_PATTERN  # noqa: E402
 
 TZ = timezone(timedelta(hours=8))  # 台北時間
 ROOT = Path(__file__).parent
@@ -67,12 +67,20 @@ def parse_rss(xml_text):
     return out
 
 
+def keep(title, topic):
+    if BLOCK_PATTERN and re.search(BLOCK_PATTERN, title, re.I):
+        return False
+    must = topic.get("must")
+    return not must or re.search(must, title, re.I) is not None
+
+
 def fetch_topic(args):
     sec, topic = args
     try:
         req = Request(feed_url(topic), headers={"User-Agent": UA})
         with urlopen(req, timeout=25) as r:
             items = parse_rss(r.read())
+        items = [i for i in items if keep(i["t"], topic)]
         items.sort(key=lambda x: x["p"], reverse=True)
         return sec, topic, items[: topic.get("max", MAX_PER_TOPIC)], None
     except Exception as e:  # 單一來源失敗不影響其他
