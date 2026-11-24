@@ -52,7 +52,7 @@ SECTIONS = [
         {"name": "NBA 傷病", "q": 'NBA injury (out OR "ruled out" OR surgery OR return)', "lang": "en"},
         {"name": "NBA 傷病 中文", "q": "NBA 傷病 OR 缺陣 OR 復出", "lang": "zh"},
     ]},
-    {"id": "celtics", "title": "☘️ 賽爾提克", "topics": [
+    {"id": "celtics", "title": "☘️ 塞爾提克", "topics": [
         {"name": "Celtics", "q": '"Boston Celtics"', "lang": "en", "max": 10},
         {"name": "塞爾提克", "q": "塞爾提克", "lang": "zh"},
     ]},
