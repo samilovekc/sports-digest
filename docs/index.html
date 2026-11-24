@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>每日運動・世界新聞</title>
+<style>
+:root{--bg:#fafaf7;--fg:#1d1d1b;--mut:#6b6b66;--card:#fff;--line:#e4e2da;--acc:#0a4d8c;--pin:#b8860b;--chip:#eceae2}
+@media(prefers-color-scheme:dark){:root{--bg:#16171a;--fg:#e8e8e4;--mut:#9a9a94;--card:#202226;--line:#32343a;--acc:#6db3f2;--pin:#e0b84a;--chip:#2a2c32}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,"Noto Sans TC","PingFang TC",sans-serif}
+header{position:sticky;top:0;background:var(--bg);border-bottom:1px solid var(--line);padding:10px 12px;z-index:5}
+h1{font-size:17px;margin:0 0 8px}
+.row{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:6px}
+button,input{font:inherit;font-size:14px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:8px;padding:5px 10px}
+button.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.chip{background:var(--chip);border:0;border-radius:99px;padding:3px 10px;font-size:13px}
+.chip.on{background:var(--acc);color:#fff}
+input[type=search]{flex:1;min-width:120px}
+main{max-width:760px;margin:0 auto;padding:8px 12px 60px}
+.day{margin-top:18px}
+.day>h2{font-size:18px;margin:0 0 4px;padding-bottom:4px;border-bottom:2px solid var(--acc)}
+.day>h2 small{color:var(--mut);font-weight:400;font-size:13px}
+.sec h3{font-size:14px;margin:14px 0 4px;color:var(--mut)}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 10px;margin:5px 0}
+.item a{color:var(--fg);text-decoration:none}
+.item a:visited{color:var(--mut)}
+.item .m{font-size:12px;color:var(--mut)}
+.item.pin{border-left:4px solid var(--pin)}
+.empty,.foot{color:var(--mut);text-align:center;margin:30px 0;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>每日運動・世界新聞 <small id="built" style="font-weight:400;color:var(--mut)"></small></h1>
+  <div class="row" id="quick"></div>
+  <div class="row"><input type="date" id="from"> → <input type="date" id="to"><button id="seen">標記看到此日</button></div>
+  <div class="row" id="chips"></div>
+  <div class="row"><input type="search" id="q" placeholder="搜尋標題 / 媒體"></div>
+</header>
+<main id="out"></main>
+<div class="foot">更新時間：2026-11-24 19:39（台北）・新聞來源：Google News RSS，點標題開啟原文</div>
+<script>
+const SECTIONS = [{"id": "royals", "title": "⭐ 堪薩斯皇家"}, {"id": "bb_fa", "title": "⚾ 美日台 自由球員 / 重大簽約"}, {"id": "bb_injury", "title": "🩹 棒球傷病更新"}, {"id": "bb_venue", "title": "🏟️ 棒球場館進度"}, {"id": "mlb_cba", "title": "🤝 MLB 勞資協議（CBA）"}, {"id": "nba_rec", "title": "🏀 NBA 球星與紀錄"}, {"id": "nba_injury", "title": "🩹 NBA 傷病"}, {"id": "celtics", "title": "☘️ 賽爾提克"}, {"id": "nfl_race", "title": "🏈 NFL 季後賽席次爭奪"}, {"id": "nfl_venue", "title": "🏟️ NFL 場館進度"}, {"id": "other", "title": "🌐 其他運動重點"}, {"id": "world", "title": "🌍 世界要聞"}];
+const $ = s => document.querySelector(s);
+const store = {get(k){try{return localStorage.getItem(k)}catch(e){return null}}, set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+let days = [], cache = {}, secFilter = null;
+const WD = ['日','一','二','三','四','五','六'];
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const addDays = (d, n) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+
+async function loadDay(d){
+  if(!(d in cache)){ try{ const r = await fetch('data/' + d + '.json'); cache[d] = r.ok ? await r.json() : []; }catch(e){ cache[d] = []; } }
+  return cache[d];
+}
+function setRange(a, b){ $('#from').value = a; $('#to').value = b; render(); }
+async function render(){
+  const a = $('#from').value, b = $('#to').value, q = $('#q').value.trim().toLowerCase();
+  const list = days.filter(x => x.d >= a && x.d <= b).map(x => x.d);
+  const out = $('#out'); out.innerHTML = '';
+  if(!list.length){ out.innerHTML = '<div class="empty">這個範圍沒有資料</div>'; return; }
+  const data = await Promise.all(list.map(loadDay));
+  list.forEach((d, i) => {
+    const items = data[i].filter(it => (!secFilter || it.c === secFilter) && (!q || (it.t + it.s).toLowerCase().includes(q)));
+    const wd = WD[new Date(d + 'T00:00:00Z').getUTCDay()];
+    let h = `<section class="day"><h2>${d} 週${wd} <small>${items.length} 則</small></h2>`;
+    for(const s of SECTIONS){
+      const rows = items.filter(it => it.c === s.id).sort((x, y) => (y.pin||0) - (x.pin||0) || (y.p > x.p ? 1 : -1));
+      if(!rows.length) continue;
+      h += `<div class="sec"><h3>${s.title}</h3>` + rows.map(it =>
+        `<div class="item${it.pin ? ' pin' : ''}"><a href="${esc(it.u)}" target="_blank" rel="noopener">${it.pin ? '⭐ ' : ''}${esc(it.t)}</a><div class="m">${esc(it.s)} · ${it.p.slice(11, 16)}</div></div>`).join('') + '</div>';
+    }
+    out.insertAdjacentHTML('beforeend', h + '</section>');
+  });
+}
+async function init(){
+  try{ days = await (await fetch('data/days.json')).json(); }catch(e){ days = []; }
+  $('#built').textContent = '';
+  if(!days.length){ $('#out').innerHTML = '<div class="empty">尚無資料，請先執行抓取</div>'; return; }
+  const latest = days[0].d, oldest = days[days.length - 1].d, seen = store.get('lastSeen');
+  const quick = [['最新一天', () => setRange(latest, latest)], ['昨天', () => setRange(addDays(latest, -1), addDays(latest, -1))],
+    ['近 3 天', () => setRange(addDays(latest, -2), latest)], ['近 7 天', () => setRange(addDays(latest, -6), latest)], ['全部', () => setRange(oldest, latest)]];
+  if(seen && seen < latest) quick.unshift([`未讀（${seen} 之後）`, () => setRange(addDays(seen, 1), latest)]);
+  $('#quick').innerHTML = ''; quick.forEach(([t, f]) => { const x = document.createElement('button'); x.textContent = t; x.onclick = f; $('#quick').appendChild(x); });
+  const chips = $('#chips'); [{id: null, title: '全部'}, ...SECTIONS].forEach(s => {
+    const c = document.createElement('button'); c.className = 'chip' + (s.id === null ? ' on' : ''); c.textContent = s.title;
+    c.onclick = () => { secFilter = s.id; chips.querySelectorAll('.chip').forEach(x => x.classList.remove('on')); c.classList.add('on'); render(); }; chips.appendChild(c); });
+  ['#from', '#to'].forEach(s => $(s).onchange = render); $('#q').oninput = render;
+  $('#seen').onclick = () => { store.set('lastSeen', $('#to').value); alert('已記住：看到 ' + $('#to').value + '，下次會出現「未讀」按鈕'); };
+  $('#from').min = $('#to').min = oldest; $('#from').max = $('#to').max = latest;
+  (seen && seen < latest) ? setRange(addDays(seen, 1), latest) : setRange(latest, latest);
+}
+init();
+</script>
+</body>
+</html>
